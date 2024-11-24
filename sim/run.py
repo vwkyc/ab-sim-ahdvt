@@ -134,70 +134,81 @@ class MixedTrafficSimulation:
     def analyze_results(self, all_metrics):
         """Analyze and visualize the collected metrics"""
         import matplotlib.pyplot as plt
-
-        metrics_to_plot = [
+        
+        metrics_to_analyze = [
+            ('number_of_stops', 'Number of Stops'),
+            ('fuel_consumption', 'Fuel Consumption'),
             ('mean_speed', 'Mean Speed (m/s)'),
-            ('average_travel_time', 'Average Travel Time'),
-            ('congestion_levels', 'Congestion Levels'),
-            ('traffic_flow_rate', 'Traffic Flow Rate')
+            ('average_travel_time', 'Average Travel Time (s)'),
+            ('traffic_flow_rate', 'Traffic Flow Rate (vehicles/s)'),
+            ('congestion_levels', 'Congested Vehicles Count')
         ]
 
-        for metric, ylabel in metrics_to_plot:
+        # Create output directory for plots
+        output_dir = "../results/plots"
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        for metric, ylabel in metrics_to_analyze:
             plt.figure(figsize=(10, 6))
             for rate in sorted(all_metrics.keys()):
                 values = all_metrics[rate][metric]
-                plt.plot(values, label=f'AV Rate {rate*100}%')
+                plt.plot(values, label=f'AV Rate {int(rate*100)}%')
             
-            plt.xlabel('Time Step')
+            plt.xlabel('Simulation Step')
             plt.ylabel(ylabel)
-            plt.title(f'{metric.replace("_", " ").title()} Over Time for Different AV Penetration Rates')
+            plt.title(f'{ylabel} Over Time')
             plt.legend()
             plt.grid(True)
-            plt.show()
+            
+            plt.savefig(os.path.join(output_dir, f"{metric}_{timestamp}.png"))
+            plt.close()
 
     def save_metrics_to_csv(self, all_metrics, output_dir="../results"):
-        """Save metrics in a more readable format"""
+        """Save metrics in a structured format"""
         os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(output_dir, f"simulation_metrics_{timestamp}.csv")
         
+        metrics_to_analyze = [
+            ('number_of_stops', 'Number of Stops'),
+            ('fuel_consumption', 'Fuel Consumption'),
+            ('mean_speed', 'Mean Speed (m/s)'),
+            ('average_travel_time', 'Average Travel Time (s)'),
+            ('traffic_flow_rate', 'Traffic Flow Rate (vehicles/s)'),
+            ('congestion_levels', 'Congested Vehicles Count')
+        ]
+        
         with open(filename, 'w', newline='') as f:
             writer = csv.writer(f)
             
-            # Group metrics by type
-            writer.writerow(['Metric Statistics by AV Penetration Rate'])
+            # Header
+            writer.writerow(['Mixed Traffic Simulation Results'])
+            writer.writerow(['Timestamp:', timestamp])
             writer.writerow([])
             
-            metrics_to_analyze = [
-                'number_of_stops',
-                'fuel_consumption',
-                'average_travel_time',
-                'traffic_flow_rate',
-                'congestion_levels',
-                'mean_speed'
-            ]
-            
-            for metric in metrics_to_analyze:
-                writer.writerow([f'\n{metric.replace("_", " ").title()}'])
-                writer.writerow(['AV Rate', 'Average', 'Maximum', 'Minimum', 'Final Value'])
+            # Metrics statistics
+            for metric, metric_name in metrics_to_analyze:
+                writer.writerow([f'\n{metric_name} Statistics'])
+                writer.writerow(['AV Rate (%)', 'Average', 'Maximum', 'Minimum', 'Final Value'])
                 
                 for rate in sorted(all_metrics.keys()):
                     values = all_metrics[rate][metric]
                     writer.writerow([
-                        f'{rate*100}%',
-                        f'{sum(values)/len(values):.2f}',
-                        f'{max(values):.2f}',
-                        f'{min(values):.2f}',
+                        int(rate*100),
+                        f'{np.mean(values):.2f}',
+                        f'{np.max(values):.2f}',
+                        f'{np.min(values):.2f}',
                         f'{values[-1]:.2f}'
                     ])
                 writer.writerow([])
             
-            # Separate section for adaptation frequency
-            writer.writerow(['Traffic Light Adaptations'])
-            writer.writerow(['AV Rate', 'Total Adaptations'])
+            # Infrastructure adaptations
+            writer.writerow(['Infrastructure Adaptations'])
+            writer.writerow(['AV Rate (%)', 'Total Adaptations'])
             for rate in sorted(all_metrics.keys()):
                 writer.writerow([
-                    f'{rate*100}%', 
+                    int(rate*100),
                     all_metrics[rate]['adaptation_frequency']
                 ])
 
