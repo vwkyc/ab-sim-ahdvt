@@ -2,7 +2,7 @@
 
 A traffic simulation framework built on SUMO (Simulation of Urban MObility) to study the impact of autonomous vehicles in mixed traffic conditions.
 
-## Features
+## Capabilities
 
 - Variable autonomous vehicle penetration rates (0-100%)
 - Dynamic traffic light adaptation
@@ -23,7 +23,6 @@ A traffic simulation framework built on SUMO (Simulation of Urban MObility) to s
 4. Install Python dependencies:
 ```
 pip install -r requirements.txt
-
 ```
 
 ## Usage
@@ -31,7 +30,6 @@ pip install -r requirements.txt
 Run the simulation:
 ```
 cd sim && python run.py
-
 ```
 
 ## Simulation Details
