@@ -28,6 +28,12 @@ class MixedTrafficSimulation:
         self.av_penetration_rate = av_penetration_rate
         self.metrics = defaultdict(list)
         self.adaptation_count = 0  # Track infrastructure adaptations
+        self.emergency_brake_threshold = -7.5  # Threshold acceleration for emergency braking
+        self.autonomous_vehicles = set()
+        # Initialize emergency braking counters
+        self.metrics["emergency_braking_total"] = 0
+        self.metrics["emergency_braking_av"] = 0
+        self.metrics["emergency_braking_human"] = 0
 
     def start_simulation(self):
         # Start SUMO with TraCI
@@ -61,6 +67,21 @@ class MixedTrafficSimulation:
         traci.trafficlight.setPhaseDuration(tls_id, 10)  # Extend green time
         self.adaptation_count += 1  # Increment adaptation count
 
+    def detect_emergency_braking(self):
+        """Detect emergency braking events and log them."""
+        vehicles = traci.vehicle.getIDList()
+        for veh_id in vehicles:
+            accel = traci.vehicle.getAcceleration(veh_id)
+            if accel <= self.emergency_brake_threshold:
+                if veh_id in self.autonomous_vehicles:
+                    veh_type = 'Autonomous Vehicle'
+                    self.metrics["emergency_braking_av"] += 1
+                else:
+                    veh_type = 'Human-Driven Vehicle'
+                    self.metrics["emergency_braking_human"] += 1
+                self.metrics["emergency_braking_total"] += 1
+                print(f"Emergency braking detected: Vehicle ID {veh_id} ({veh_type}) at time {traci.simulation.getTime()}")
+
     def collect_metrics(self):
         """Collect basic metrics like number of stops and fuel consumption"""
         vehicles = traci.vehicle.getIDList()
@@ -69,11 +90,11 @@ class MixedTrafficSimulation:
             self.metrics["fuel_consumption"].append(0)
             self.metrics["mean_speed"].append(0)
             return
-        
+
         stops = sum(1 for v in vehicles if traci.vehicle.getStopState(v))
         fuel_consumption = sum(traci.vehicle.getFuelConsumption(v) for v in vehicles)
         speeds = [traci.vehicle.getSpeed(v) for v in vehicles]
-        
+
         self.metrics["number_of_stops"].append(stops)
         self.metrics["fuel_consumption"].append(fuel_consumption)
         self.metrics["mean_speed"].append(sum(speeds) / len(vehicles))  # Fixed mean speed calculation
@@ -114,6 +135,7 @@ class MixedTrafficSimulation:
             for vehicle_id in traci.simulation.getDepartedIDList():
                 if np.random.random() < self.av_penetration_rate:
                     av = AutonomousVehicle(vehicle_id)
+                    self.autonomous_vehicles.add(vehicle_id)
                     av.perform_behavior()
 
             # Adapt infrastructure periodically
@@ -123,6 +145,7 @@ class MixedTrafficSimulation:
             # Collect metrics at each step
             self.collect_metrics()
             self.collect_additional_metrics()
+            self.detect_emergency_braking()
 
             step += 1
 
@@ -134,7 +157,7 @@ class MixedTrafficSimulation:
     def analyze_results(self, all_metrics):
         """Analyze and visualize the collected metrics"""
         import matplotlib.pyplot as plt
-        
+
         metrics_to_analyze = [
             ('number_of_stops', 'Number of Stops'),
             ('fuel_consumption', 'Fuel Consumption'),
@@ -154,13 +177,13 @@ class MixedTrafficSimulation:
             for rate in sorted(all_metrics.keys()):
                 values = all_metrics[rate][metric]
                 plt.plot(values, label=f'AV Rate {int(rate*100)}%')
-            
+
             plt.xlabel('Simulation Step')
             plt.ylabel(ylabel)
             plt.title(f'{ylabel} Over Time')
             plt.legend()
             plt.grid(True)
-            
+
             plt.savefig(os.path.join(output_dir, f"{metric}_{timestamp}.png"))
             plt.close()
 
@@ -169,7 +192,7 @@ class MixedTrafficSimulation:
         os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(output_dir, f"simulation_metrics_{timestamp}.csv")
-        
+
         metrics_to_analyze = [
             ('number_of_stops', 'Number of Stops'),
             ('fuel_consumption', 'Fuel Consumption'),
@@ -178,20 +201,20 @@ class MixedTrafficSimulation:
             ('traffic_flow_rate', 'Traffic Flow Rate (vehicles/s)'),
             ('congestion_levels', 'Congested Vehicles Count')
         ]
-        
+
         with open(filename, 'w', newline='') as f:
             writer = csv.writer(f)
-            
+
             # Header
             writer.writerow(['Mixed Traffic Simulation Results'])
             writer.writerow(['Timestamp:', timestamp])
             writer.writerow([])
-            
+
             # Metrics statistics
             for metric, metric_name in metrics_to_analyze:
                 writer.writerow([f'\n{metric_name} Statistics'])
                 writer.writerow(['AV Rate (%)', 'Average', 'Maximum', 'Minimum', 'Final Value'])
-                
+
                 for rate in sorted(all_metrics.keys()):
                     values = all_metrics[rate][metric]
                     writer.writerow([
@@ -202,9 +225,9 @@ class MixedTrafficSimulation:
                         f'{values[-1]:.2f}'
                     ])
                 writer.writerow([])
-            
+
             # Infrastructure adaptations
-            writer.writerow(['Infrastructure Adaptations'])
+            writer.writerow(['\nInfrastructure Adaptations'])
             writer.writerow(['AV Rate (%)', 'Total Adaptations'])
             for rate in sorted(all_metrics.keys()):
                 writer.writerow([
@@ -212,11 +235,22 @@ class MixedTrafficSimulation:
                     all_metrics[rate]['adaptation_frequency']
                 ])
 
+            # Emergency braking statistics
+            writer.writerow(['\nEmergency Braking Statistics'])
+            writer.writerow(['AV Rate (%)', 'Total Emergency Brakings', 'AV Emergency Brakings', 'Human-Driven Emergency Brakings'])
+            for rate in sorted(all_metrics.keys()):
+                writer.writerow([
+                    int(rate*100),
+                    all_metrics[rate]['emergency_braking_total'],
+                    all_metrics[rate]['emergency_braking_av'],
+                    all_metrics[rate]['emergency_braking_human']
+                ])
+
 def main():
-    #av_rates = [0.0, 0.25, 0.5, 0.75, 1.0] # Full range
-    av_rates = [0.0, 0.5, 1.0] # Reduced for faster execution
+    # av_rates = [0.0, 0.25, 0.5, 0.75, 1.0]  # Full range
+    av_rates = [0.0, 0.5, 1.0]  # Reduced for faster execution
     all_metrics = {}
-    
+
     for rate in av_rates:
         print(f"Running simulation with AV penetration rate: {rate*100}%")
         sim = MixedTrafficSimulation(
@@ -226,7 +260,7 @@ def main():
         metrics = sim.run()
         all_metrics[rate] = metrics
         print(f"Simulation completed for AV rate: {rate*100}%")
-    
+
     sim.save_metrics_to_csv(all_metrics)
     sim.analyze_results(all_metrics)
 
